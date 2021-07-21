@@ -3,6 +3,8 @@ import json
 import pickle
 import numpy as np
 import tensorflow as tf
+# required to make tf.compat.v1.placeholder function properly
+tf.compat.v1.disable_eager_execution()
 from tensorflow import keras
 from tensorflow.python.keras.layers import Input, Dense, Lambda, Embedding,\
     BatchNormalization, Activation, Add, concatenate, Permute
@@ -641,11 +643,11 @@ class GDyNet(object):
         preds = reorder_predictions(raw_preds, len(self.test_flist),
                                     self.tau)
         np.save(os.path.join(result_dir, 'test_pred.npy'), preds)
-        preds_placeholder = tf.placeholder(raw_preds.dtype,
+        preds_placeholder = tf.compat.v1.placeholder(raw_preds.dtype,
                                            shape=raw_preds.shape)
         metric_vamp = self.vamp.metric_VAMP(None, preds_placeholder)
         metric_vamp2 = self.vamp.metric_VAMP2(None, preds_placeholder)
-        with tf.Session() as sess:
+        with tf.compat.v1.Session() as sess:
             results = sess.run([metric_vamp, metric_vamp2],
                                feed_dict={preds_placeholder: raw_preds})
         np.savetxt(os.path.join(result_dir, 'test_eval.csv'),

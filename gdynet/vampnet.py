@@ -97,7 +97,7 @@ class VampnetTools(object):
         cov_00_ir, cov_11_ir, cov_01 = matrices
 
         vamp_matrix = tf.matmul(cov_00_ir, tf.matmul(cov_01, cov_11_ir))
-        D,U,V = tf.svd(vamp_matrix, full_matrices=True)
+        D,U,V = tf.linalg.svd(vamp_matrix, full_matrices=True)
         diag = tf.diag(D)
 
         # Base-changed covariance matrices
@@ -280,7 +280,7 @@ class VampnetTools(object):
         vamp_matrix = tf.matmul(cov_00_ir, tf.matmul(cov_01, cov_11_ir))
 
         # Select the K highest singular values of the VAMP matrix
-        diag = tf.convert_to_tensor(tf.svd(vamp_matrix, compute_uv=False))
+        diag = tf.convert_to_tensor(tf.linalg.svd(vamp_matrix, compute_uv=False))
         cond = tf.greater(self.k_eig, 0)
         top_k_val = tf.nn.top_k(diag, k=self.k_eig)[0]
 
@@ -327,7 +327,7 @@ class VampnetTools(object):
         vamp_matrix = tf.matmul(cov_00_ir, tf.matmul(cov_01, cov_11_ir))
 
         # Select the K highest singular values of the VAMP matrix
-        diag = tf.convert_to_tensor(tf.svd(vamp_matrix, compute_uv=False))
+        diag = tf.convert_to_tensor(tf.linalg.svd(vamp_matrix, compute_uv=False))
         cond = tf.greater(self.k_eig, 0)
         top_k_val = tf.nn.top_k(diag, k=self.k_eig)[0]
 
@@ -609,7 +609,8 @@ class VampnetTools(object):
         '''
 
         # Calculate eigvalues and eigvectors
-        eigval_all, eigvec_all = tf.self_adjoint_eig(x)
+        # one more edit here to correct the tf.self_adjoint_eig to linalg.eigh
+        eigval_all, eigvec_all = tf.linalg.eigh(x)
 
         # Filter out eigvalues below threshold and corresponding eigvectors
         eig_th = tf.constant(self.epsilon, dtype=tf.float32)
@@ -619,8 +620,8 @@ class VampnetTools(object):
 
         # Build the diagonal matrix with the filtered eigenvalues or square
         # root of the filtered eigenvalues according to the parameter
-        eigval_inv = tf.diag(1/eigval)
-        eigval_inv_sqrt = tf.diag(tf.sqrt(1/eigval))
+        eigval_inv = tf.linalg.diag(1/eigval)
+        eigval_inv_sqrt = tf.linalg.diag(tf.sqrt(1/eigval))
 
         cond_sqrt = tf.convert_to_tensor(ret_sqrt)
 
@@ -661,7 +662,9 @@ class VampnetTools(object):
         '''
 
         shape = tf.shape(data)
-        b = tf.to_float(shape[0])
+        # ad-hoc fix recommended in this closed tensorflow issue: https://github.com/google/tangent/issues/95
+        # this was necessary since the code is two years old
+        b = tf.cast(shape[0], tf.float32)
         o = shape[1]//2
 
         # Split the data of the two networks and transpose it
@@ -835,8 +838,8 @@ class VampnetTools(object):
 
         vamp_matrix = tf.matmul(cov_00_ir, tf.matmul(cov_01, cov_00_ir))
 
-        D,U,V = tf.svd(vamp_matrix, full_matrices=True)
-        diag = tf.diag(D)
+        D,U,V = tf.linalg.svd(vamp_matrix, full_matrices=True)
+        diag = tf.linalg.diag(D)
 
         # Base-changed covariance matrices
         x_base = tf.matmul(cov_00_ir, U)
@@ -899,7 +902,7 @@ class VampnetTools(object):
         vamp_matrix = tf.matmul(cov_00_ir, tf.matmul(cov_01, cov_00_ir))
 
         # Select the K highest singular values of the VAMP matrix
-        diag = tf.convert_to_tensor(tf.svd(vamp_matrix, compute_uv=False))
+        diag = tf.convert_to_tensor(tf.linalg.svd(vamp_matrix, compute_uv=False))
         cond = tf.greater(self.k_eig, 0)
         top_k_val = tf.nn.top_k(diag, k=self.k_eig)[0]
 
