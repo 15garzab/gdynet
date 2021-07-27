@@ -15,7 +15,7 @@
 #   You should have received a copy of the GNU Lesser General Public License
 #   along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-import tensorflow as tf
+import tensorflow.compat.v1 as tf
 import numpy as np
 from scipy import optimize
 import matplotlib

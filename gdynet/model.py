@@ -2,16 +2,19 @@ import os
 import json
 import pickle
 import numpy as np
-import tensorflow as tf
+import tensorflow.compat.v1 as tf
 # required to make tf.compat.v1.placeholder function properly
-tf.compat.v1.disable_eager_execution()
-from tensorflow import keras
-from tensorflow.python.keras.layers import Input, Dense, Lambda, Embedding,\
+tf.disable_eager_execution()
+tf.disable_v2_behavior()
+from tensorflow.compat.v1 import keras
+from tensorflow.compat.v1.keras.layers import Input, Dense, Lambda, Embedding,\
     BatchNormalization, Activation, Add, concatenate, Permute
 from .data import MDStackGenerator, MDStackGenerator_direct,\
     MDStackGenerator_vannila
 from .vampnet import VampnetTools
 
+# needed to move the Lambda custom layers up out of the class in order for
+# them to be accessed by Keras model saving/loading for interactive prediction
 
 def _concat_nbrs(inps):
     """
@@ -315,6 +318,20 @@ class GDyNet(object):
         self.random_seed = random_seed
         self.vamp = VampnetTools(epsilon=1e-5, k_eig=self.k_eig)
 
+    # TODO need to override the get_config method to account for custom layers
+    # https://stackoverflow.com/questions/58678836/notimplementederror-layers-with-arguments-in-init-must-override-get-conf
+    def get_config(self):
+        config = super().get_config().copy()
+        config.update({
+            'n_classes': self.n_classes,
+            'atom_fea_len': self.atom_fea_len,
+            'bond_fea_len': self.bond_fea_len,
+            'num_atom': self.num_atom,
+            'num_nbr': self.num_nbr,
+            'num_target': self.num_target
+        })
+        return config
+
     def build_cgcnn_layer(self, atom_fea, bond_fea, nbr_list):
         total_fea = Lambda(_concat_nbrs, output_shape=_concat_nbrs_output_shape
                            )([atom_fea, bond_fea, nbr_list])
@@ -522,7 +539,7 @@ class GDyNet(object):
             weights_file = os.path.join(self.job_dir,
                                         'last_model.hdf5'.format(
                                             init_stage))
-            self.model.load_weights(weights_file)
+            self.model.load_model(weights_file)
             is_continue = True
         except IOError:
             init_epoch, init_stage, is_continue = 0, 0, False
@@ -554,38 +571,40 @@ class GDyNet(object):
                 opti_state_file = os.path.join(self.job_dir, 'opti_state.pkl')
                 load_keras_optimizer(self.model, opti_state_file)
                 is_continue = False
-            best_model_path = os.path.join(
+            self.best_model_path = os.path.join(
                 self.job_dir, 'best_model_{}.hdf5'.format(l_index))
-            last_model_path = os.path.join(
+            self.last_model_path = os.path.join(
                 self.job_dir, 'last_model.hdf5'.format(l_index))
-            train_logger_path = os.path.join(
+            self.train_logger_path = os.path.join(
                 self.job_dir, 'train_{}.log'.format(l_index))
-            opti_state_path = os.path.join(
+            self.opti_state_path = os.path.join(
                 self.job_dir, 'opti_state.pkl')
-            train_state_path = os.path.join(
+            self.train_state_path = os.path.join(
                 self.job_dir, 'train_state.json')
             callbacks = [keras.callbacks.TerminateOnNaN(),
                          keras.callbacks.ModelCheckpoint(
-                         best_model_path,
+                         self.best_model_path,
                          monitor='val_metric_VAMP2',
                          save_best_only=True, save_weights_only=True,
                          mode='max'),
                          keras.callbacks.ModelCheckpoint(
-                         last_model_path,
+                         self.last_model_path,
                          save_weights_only=True),
                          keras.callbacks.CSVLogger(
-                         train_logger_path,
+                         self.train_logger_path,
                          separator=',', append=True),
-                         EpochCounter(train_state_path, train_stage=l_index),
-                         SaveOptimizerState(opti_state_path)]
-            self.model.fit_generator(generator=self.train_generator,
-                                     validation_data=self.val_generator,
-                                     use_multiprocessing=False,
-                                     epochs=self.n_epoch,
-                                     callbacks=callbacks,
-                                     initial_epoch=init_epoch)
+                         EpochCounter(self.train_state_path, train_stage=l_index),
+                         SaveOptimizerState(self.opti_state_path)]
+            self.model.fit(x=self.train_generator,
+                            validation_data=self.val_generator,
+                            use_multiprocessing=False,
+                            epochs=self.n_epoch,
+                            callbacks=callbacks,
+                            initial_epoch=init_epoch)
         # evaluate_generator seems to evaluate on batches instead of all
         # predictions. keras bug?
+        # some kind of error with batch normalization it seems:
+        # " 'Operation' object has no attribute '_unconditional_update' "
 
         # delete training and validation data to save memory
         del self.train_generator
@@ -638,17 +657,17 @@ class GDyNet(object):
         # load weights
         weights_file = os.path.join(self.job_dir, 'last_model.hdf5')
         self.model.load_weights(weights_file)
-        raw_preds = self.model.predict_generator(generator=self.test_generator,
-                                                 use_multiprocessing=False)
+        raw_preds = self.model.predict(x=self.test_generator, use_multiprocessing=False)
         preds = reorder_predictions(raw_preds, len(self.test_flist),
                                     self.tau)
         np.save(os.path.join(result_dir, 'test_pred.npy'), preds)
-        preds_placeholder = tf.compat.v1.placeholder(raw_preds.dtype,
+        preds_placeholder = tf.placeholder(raw_preds.dtype,
                                            shape=raw_preds.shape)
         metric_vamp = self.vamp.metric_VAMP(None, preds_placeholder)
         metric_vamp2 = self.vamp.metric_VAMP2(None, preds_placeholder)
-        with tf.compat.v1.Session() as sess:
+        with tf.Session() as sess:
             results = sess.run([metric_vamp, metric_vamp2],
                                feed_dict={preds_placeholder: raw_preds})
         np.savetxt(os.path.join(result_dir, 'test_eval.csv'),
                    np.array(results), delimiter=',')
+        self.model.save(self.last_model_path, include_optimizer = True, save_format='h5',options=tf.saved_model.SaveOptions(experimental_io_device='CPU:0'))
