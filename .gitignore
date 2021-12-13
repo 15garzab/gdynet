@@ -3,6 +3,13 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+# sphinx source and makefiles
+Makefile
+make.bat
+./source/*
+# compressed .npz graph files for inputs (for tests)
+*.npz
+
 # C extensions
 *.so
 

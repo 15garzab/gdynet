@@ -15,7 +15,7 @@
 #   You should have received a copy of the GNU Lesser General Public License
 #   along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-import tensorflow.compat.v1 as tf
+import tensorflow as tf
 import numpy as np
 from scipy import optimize
 import matplotlib
@@ -25,9 +25,9 @@ import matplotlib.pyplot as plt
 
 class VampnetTools(object):
 
-    '''Wrapper for the functions used for the development of a VAMPnet.
+    """Wrapper for the functions used for the development of a VAMPnet.
 
-    Parameters
+    Attributes
     ----------
 
     epsilon: float, optional, default = 1e-10
@@ -40,7 +40,7 @@ class VampnetTools(object):
         calculating the VAMP score. If k_eig is higher than zero, only the top
         k_eig values will be considered, otherwise teh algorithms will use all
         the available singular/eigen values.
-    '''
+    """
 
     def __init__(self, epsilon=1e-10, k_eig=0):
         self._epsilon = epsilon
@@ -64,7 +64,7 @@ class VampnetTools(object):
 
 
     def loss_VAMP(self, y_true, y_pred):
-        '''Calculates the gradient of the VAMP-1 score calculated with respect
+        """Calculates the gradient of the VAMP-1 score calculated with respect
         to the network lobes. Using the shrinkage algorithm to guarantee that
         the auto-covariance matrices are really positive definite and that their
         inverse square-root exists. Can be used as a losseigval_inv_sqrt function
@@ -83,7 +83,7 @@ class VampnetTools(object):
         -------
         loss_score: tensorflow tensor with shape [batch_size, 2 * output_size].
             gradient of the VAMP-1 score
-        '''
+        """
 
         # reshape data
         y_pred = self._reshape_data(y_pred)
@@ -98,7 +98,7 @@ class VampnetTools(object):
 
         vamp_matrix = tf.matmul(cov_00_ir, tf.matmul(cov_01, cov_11_ir))
         D,U,V = tf.linalg.svd(vamp_matrix, full_matrices=True)
-        diag = tf.diag(D)
+        diag = tf.linalg.tensor_diag(D)
 
         # Base-changed covariance matrices
         x_base = tf.matmul(cov_00_ir, U)
@@ -118,8 +118,8 @@ class VampnetTools(object):
         y_der = 1/(batch_size - 1) * y_der
 
         # Transpose back as the input y_pred was
-        x_1d = tf.transpose(x_der)
-        y_1d = tf.transpose(y_der)
+        x_1d = tf.transpose(a=x_der)
+        y_1d = tf.transpose(a=y_der)
 
         # Concatenate it again
         concat_derivatives = tf.concat([x_1d, y_1d], axis=-1)
@@ -134,7 +134,7 @@ class VampnetTools(object):
 
 
     def loss_VAMP2_autograd(self, y_true, y_pred):
-        '''Calculates the VAMP-2 score with respect to the network lobes. Same function
+        """Calculates the VAMP-2 score with respect to the network lobes. Same function
         as loss_VAMP2, but the gradient is computed automatically by tensorflow. Added
         after tensorflow 1.5 introduced gradients for eigenvalue decomposition and SVD
 
@@ -151,7 +151,7 @@ class VampnetTools(object):
         -------
         loss_score: tensorflow tensor with shape [batch_size, 2 * output_size].
             gradient of the VAMP-2 score
-        '''
+        """
 
         # reshape data
         y_pred = self._reshape_data(y_pred)
@@ -171,13 +171,13 @@ class VampnetTools(object):
         vamp_matrix = tf.matmul(tf.matmul(cov_00_inv, cov_01), cov_11_inv)
 
 
-        vamp_score = tf.norm(vamp_matrix)
+        vamp_score = tf.norm(tensor=vamp_matrix)
 
         return - tf.square(vamp_score)
 
 
     def loss_VAMP2(self, y_true, y_pred):
-        '''Calculates the gradient of the VAMP-2 score calculated with respect
+        """Calculates the gradient of the VAMP-2 score calculated with respect
         to the network lobes. Using the shrinkage algorithm to guarantee that
         the auto-covariance matrices are really positive definite and that their
         inverse square-root exists. Can be used as a loss function for a keras
@@ -196,7 +196,7 @@ class VampnetTools(object):
         -------
         loss_score: tensorflow tensor with shape [batch_size, 2 * output_size].
             gradient of the VAMP-2 score
-        '''
+        """
 
         # reshape data
         y_pred = self._reshape_data(y_pred)
@@ -227,8 +227,8 @@ class VampnetTools(object):
         y_der = 2/(batch_size - 1) * tf.matmul(left_part_y, right_part_y)
 
         # Transpose back as the input y_pred was
-        x_1d = tf.transpose(x_der)
-        y_1d = tf.transpose(y_der)
+        x_1d = tf.transpose(a=x_der)
+        y_1d = tf.transpose(a=y_der)
 
         # Concatenate it again
         concat_derivatives = tf.concat([x_1d,y_1d], axis=-1)
@@ -244,7 +244,7 @@ class VampnetTools(object):
 
 
     def metric_VAMP(self, y_true, y_pred):
-        '''Returns the sum of the top k eigenvalues of the vamp matrix, with k
+        """Returns the sum of the top k eigenvalues of the vamp matrix, with k
         determined by the wrapper parameter k_eig, and the vamp matrix defined
         as:
             V = cov_00 ^ -1/2 * cov_01 * cov_11 ^ -1/2
@@ -263,7 +263,7 @@ class VampnetTools(object):
         -------
         eig_sum: tensorflow float
             sum of the k highest eigenvalues in the vamp matrix
-        '''
+        """
 
         # reshape data
         y_pred = self._reshape_data(y_pred)
@@ -280,18 +280,18 @@ class VampnetTools(object):
         vamp_matrix = tf.matmul(cov_00_ir, tf.matmul(cov_01, cov_11_ir))
 
         # Select the K highest singular values of the VAMP matrix
-        diag = tf.convert_to_tensor(tf.linalg.svd(vamp_matrix, compute_uv=False))
+        diag = tf.convert_to_tensor(value=tf.linalg.svd(vamp_matrix, compute_uv=False))
         cond = tf.greater(self.k_eig, 0)
         top_k_val = tf.nn.top_k(diag, k=self.k_eig)[0]
 
         # Sum the singular values
-        eig_sum = tf.cond(cond, lambda: tf.reduce_sum(top_k_val), lambda: tf.reduce_sum(diag))
+        eig_sum = tf.cond(pred=cond, true_fn=lambda: tf.reduce_sum(input_tensor=top_k_val), false_fn=lambda: tf.reduce_sum(input_tensor=diag))
 
         return eig_sum
 
 
     def metric_VAMP2(self, y_true, y_pred):
-        '''Returns the sum of the squared top k eigenvalues of the vamp matrix,
+        """Returns the sum of the squared top k eigenvalues of the vamp matrix,
         with k determined by the wrapper parameter k_eig, and the vamp matrix
         defined as:
             V = cov_00 ^ -1/2 * cov_01 * cov_11 ^ -1/2
@@ -310,7 +310,7 @@ class VampnetTools(object):
         -------
         eig_sum_sq: tensorflow float
             sum of the squared k highest eigenvalues in the vamp matrix
-        '''
+        """
 
         # reshape data
         y_pred = self._reshape_data(y_pred)
@@ -327,26 +327,26 @@ class VampnetTools(object):
         vamp_matrix = tf.matmul(cov_00_ir, tf.matmul(cov_01, cov_11_ir))
 
         # Select the K highest singular values of the VAMP matrix
-        diag = tf.convert_to_tensor(tf.linalg.svd(vamp_matrix, compute_uv=False))
+        diag = tf.convert_to_tensor(value=tf.linalg.svd(vamp_matrix, compute_uv=False))
         cond = tf.greater(self.k_eig, 0)
         top_k_val = tf.nn.top_k(diag, k=self.k_eig)[0]
 
         # Square the singular values and sum them
-        pow2_topk = tf.reduce_sum(tf.multiply(top_k_val,top_k_val))
-        pow2_diag = tf.reduce_sum(tf.multiply(diag,diag))
-        eig_sum_sq = tf.cond(cond, lambda: pow2_topk, lambda: pow2_diag)
+        pow2_topk = tf.reduce_sum(input_tensor=tf.multiply(top_k_val,top_k_val))
+        pow2_diag = tf.reduce_sum(input_tensor=tf.multiply(diag,diag))
+        eig_sum_sq = tf.cond(pred=cond, true_fn=lambda: pow2_topk, false_fn=lambda: pow2_diag)
 
         return eig_sum_sq
 
 
     def estimate_koopman_op(self, traj, tau):
-        '''Estimates the koopman operator for a given trajectory at the lag time
+        """Estimates the koopman operator for a given trajectory at the lag time
             specified. The formula for the estimation is:
                 K = C00 ^ -1 @ C01
 
         Parameters
         ----------
-        traj: numpy array with size [traj_timesteps, n_traj, traj_dimensions]
+        traj: numpy array (shape : [traj_timesteps, n_traj, traj_dimensions])
             Trajectory described by the returned koopman operator
 
         tau: int
@@ -354,10 +354,10 @@ class VampnetTools(object):
 
         Returns
         -------
-        koopman_op: numpy array with shape [traj_dimensions, traj_dimensions]
+        koopman_op: numpy array (shape : [traj_dimensions, traj_dimensions])
             Koopman operator estimated at timeshift tau
 
-        '''
+        """
         n_classes = traj.shape[-1]
         prev = traj[:-tau].reshape(-1, n_classes)
         post = traj[tau:].reshape(-1, n_classes)
@@ -376,22 +376,22 @@ class VampnetTools(object):
 
 
     def get_its(self, traj, lags):
-        ''' Implied timescales from a trajectory estimated at a series of lag times.
+        """Implied timescales from a trajectory estimated at a series of lag times.
 
         Parameters
         ----------
-        traj: numpy array with size [traj_timesteps, n_traj, traj_dimensions]
+        traj: numpy array (shape : [traj_timesteps, n_traj, traj_dimensions])
             trajectory data
 
-        lags: numpy array with size [lag_times]
+        lags: numpy array  (shape : [lag_times])
             series of lag times at which the implied timescales are estimated
 
         Returns
         -------
-        its: numpy array with size [traj_dimensions - 1, lag_times]
+        its: numpy array (shape : [traj_dimensions - 1, lag_times])
             Implied timescales estimated for the trajectory.
 
-        '''
+        """
 
         its = np.zeros((traj.shape[-1]-1, len(lags)))
 
@@ -406,28 +406,28 @@ class VampnetTools(object):
 
 
     def get_ck_test(self, traj, steps, tau):
-        ''' Chapman-Kolmogorov test for the koopman operator
+        """Chapman-Kolmogorov test for the koopman operator
         estimated for the given trajectory at the given lag times
 
         Parameters
         ----------
-        traj: numpy array with size [traj_timesteps, n_traj, traj_dimensions]
+        traj: numpy array (shape: [traj_timesteps, n_traj, traj_dimensions])
             trajectory data
 
         steps: int
-            how many lag times the ck test will be evaluated at
+            how many lag times to evaluate the ck test
 
         tau: int
             shift between consecutive lag times
 
         Returns
         -------
-        predicted: numpy array with size [traj_dimensions, traj_dimensions, steps]
-        estimated: numpy array with size [traj_dimensions, traj_dimensions, steps]
+        predicted: numpy array (shape : [traj_dimensions, traj_dimensions, steps])
+        estimated: numpy array (shape : [traj_dimensions, traj_dimensions, steps])
             The predicted and estimated transition probabilities at the
             indicated lag times
 
-        '''
+        """
 
         n_states = traj.shape[-1]
 
@@ -454,7 +454,7 @@ class VampnetTools(object):
 
 
     def estimate_koopman_constrained(self, traj, tau, th=0):
-        ''' Calculate the transition matrix that minimizes the norm of the prediction
+        """Calculate the transition matrix that minimizes the norm of the prediction
         error between the trajectory and the tau-shifted trajectory, using the
         estimate of the non-reversible koopman operator as a starting value.
         The constraints impose that all the values in the matrix are positive, and that
@@ -478,7 +478,7 @@ class VampnetTools(object):
         koop_positive: numpy array with shape [traj_dimensions, traj_dimensions]
             Koopman operator estimated at timeshift tau
 
-        '''
+        """
 
         koop_init = self.estimate_koopman_op(traj, tau)
 
@@ -529,7 +529,7 @@ class VampnetTools(object):
 
 
     def plot_its(self, its, lag, ylog=False):
-        '''Plots the implied timescales calculated by the function
+        """Plots the implied timescales calculated by the function
         'get_its'
 
         Parameters
@@ -542,7 +542,7 @@ class VampnetTools(object):
             if true, the plot will be a logarithmic plot, otherwise it
             will be a semilogy plot
 
-        '''
+        """
 
         if ylog:
             plt.loglog(lag, its.T[:,::-1]);
@@ -556,7 +556,7 @@ class VampnetTools(object):
 
 
     def plot_ck_test(self, pred, est, n_states, steps, tau):
-        '''Plots the result of the Chapman-Kolmogorov test calculated by the function
+        """Plots the result of the Chapman-Kolmogorov test calculated by the function
         'get_ck_test'
 
         Parameters
@@ -569,7 +569,7 @@ class VampnetTools(object):
         tau: int
             values used for the Chapman-Kolmogorov test as parameters in the function
             get_ck_test
-        '''
+        """
 
         fig, ax = plt.subplots(n_states, n_states, sharex=True, sharey=True)
         for index_i in range(n_states):
@@ -591,7 +591,7 @@ class VampnetTools(object):
 
 
     def _inv(self, x, ret_sqrt=False):
-        '''Utility function that returns the inverse of a matrix, with the
+        """Utility function that returns the inverse of a matrix, with the
         option to return the square root of the inverse matrix.
 
         Parameters
@@ -606,7 +606,7 @@ class VampnetTools(object):
         -------
         x_inv: numpy array with shape [m,m]
             inverse of the original matrix
-        '''
+        """
 
         # Calculate eigvalues and eigvectors
         # one more edit here to correct the tf.self_adjoint_eig to linalg.eigh
@@ -616,25 +616,25 @@ class VampnetTools(object):
         eig_th = tf.constant(self.epsilon, dtype=tf.float32)
         index_eig = tf.where(eigval_all > eig_th)
         eigval = tf.gather_nd(eigval_all, index_eig)
-        eigvec = tf.gather_nd(tf.transpose(eigvec_all), index_eig)
+        eigvec = tf.gather_nd(tf.transpose(a=eigvec_all), index_eig)
 
         # Build the diagonal matrix with the filtered eigenvalues or square
         # root of the filtered eigenvalues according to the parameter
         eigval_inv = tf.linalg.diag(1/eigval)
         eigval_inv_sqrt = tf.linalg.diag(tf.sqrt(1/eigval))
 
-        cond_sqrt = tf.convert_to_tensor(ret_sqrt)
+        cond_sqrt = tf.convert_to_tensor(value=ret_sqrt)
 
-        diag = tf.cond(cond_sqrt, lambda: eigval_inv_sqrt, lambda: eigval_inv)
+        diag = tf.cond(pred=cond_sqrt, true_fn=lambda: eigval_inv_sqrt, false_fn=lambda: eigval_inv)
 
         # Rebuild the square root of the inverse matrix
-        x_inv = tf.matmul(tf.transpose(eigvec), tf.matmul(diag, eigvec))
+        x_inv = tf.matmul(tf.transpose(a=eigvec), tf.matmul(diag, eigvec))
 
         return x_inv
 
 
     def _prep_data(self, data):
-        '''Utility function that transorms the input data from a tensorflow -
+        """Utility function that transorms the input data from a tensorflow -
         viable format to a structure used by the following functions in the
         pipeline.
 
@@ -659,21 +659,21 @@ class VampnetTools(object):
         o: int
             output size of each lobe of the network
 
-        '''
+        """
 
-        shape = tf.shape(data)
+        shape = tf.shape(input=data)
         # ad-hoc fix recommended in this closed tensorflow issue: https://github.com/google/tangent/issues/95
         # this was necessary since the code is two years old
         b = tf.cast(shape[0], tf.float32)
         o = shape[1]//2
 
         # Split the data of the two networks and transpose it
-        x_biased = tf.transpose(data[:,:o])
-        y_biased = tf.transpose(data[:,o:])
+        x_biased = tf.transpose(a=data[:,:o])
+        y_biased = tf.transpose(a=data[:,o:])
 
         # Subtract the mean
-        x = x_biased - tf.reduce_mean(x_biased, axis=1, keepdims=True)
-        y = y_biased - tf.reduce_mean(y_biased, axis=1, keepdims=True)
+        x = x_biased - tf.reduce_mean(input_tensor=x_biased, axis=1, keepdims=True)
+        y = y_biased - tf.reduce_mean(input_tensor=y_biased, axis=1, keepdims=True)
 
         return x, y, b, o
 
@@ -688,22 +688,22 @@ class VampnetTools(object):
 
         Parameters
         ----------
-        data: tensorflow tensor with shape [b0, n0, 2*o]
+        data: tensorflow tensor (shape : [b0, n0, 2*o])
 
         Returns
         -------
-        reshaped_data: tensorflow tensor with shape [b, 2*o]
+        reshaped_data: tensorflow tensor (shape : [b, 2*o])
         """
 
         # combine all li in each traj together
-        o0 = tf.shape(data)[-1]
+        o0 = tf.shape(input=data)[-1]
         reshaped_data = tf.reshape(data, (-1, o0))
         return reshaped_data
 
 
 
     def _build_vamp_matrices(self, x, y, b):
-        '''Utility function that returns the matrices used to compute the VAMP
+        """Utility function that returns the matrices used to compute the VAMP
         scores and their gradients for non-reversible problems.
 
         Parameters
@@ -728,7 +728,7 @@ class VampnetTools(object):
         cov_01: numpy array with shape [output_size, output_size]
             cross-covariance matrix of x and y
 
-        '''
+        """
 
         # Calculate the cross-covariance
         cov_01 = 1/(b-1) * tf.matmul(x, y, transpose_b=True)
@@ -744,7 +744,7 @@ class VampnetTools(object):
 
 
     def _build_vamp_matrices_rev(self, x, y, b):
-        '''Utility function that returns the matrices used to compute the VAMP
+        """Utility function that returns the matrices used to compute the VAMP
         scores and their gradients for reversible problems. The matrices are
         transformed into symmetrical matrices by calculating the covariances
         using the mean of the auto- and cross-covariances, so that:
@@ -772,7 +772,7 @@ class VampnetTools(object):
 
         cross_cov: numpy array with shape [output_size, output_size]
             mean of the cross-covariance matrices of x and y
-        '''
+        """
 
         # Calculate the cross-covariances
         cov_01 = 1/(b-1) * tf.matmul(x, y, transpose_b=True)
@@ -789,15 +789,9 @@ class VampnetTools(object):
         return auto_cov_inv_root, cross_cov
 
 
-
-    #### EXPERIMENTAL FUNCTIONS ####
-
-
     def _loss_VAMP_sym(self, y_true, y_pred):
-        '''WORK IN PROGRESS
-
-        Calculates the gradient of the VAMP-1 score calculated with respect
-        to the network lobes. Using the shrinkage algorithm to guarantee that
+        """Calculates the gradient of the VAMP-1 score calculated with respect
+        to the network lobes (WORK IN PROGRESS). Using the shrinkage algorithm to guarantee that
         the auto-covariance matrices are really positive definite and that their
         inverse square-root exists. Can be used as a loss function for a keras
         model. The difference with the main loss_VAMP function is that here the
@@ -813,18 +807,18 @@ class VampnetTools(object):
 
         Parameters
         ----------
-        y_true: tensorflow tensor.
+        y_true: tensorflow tensor
             parameter not needed for the calculation, added to comply with Keras
             rules for loss fuctions format.
 
-        y_pred: tensorflow tensor with shape [batch_size, 2 * output_size]
+        y_pred: tensorflow tensor (shape : [batch_size, 2 * output_size])
             output of the two lobes of the network
 
         Returns
         -------
-        loss_score: tensorflow tensor with shape [batch_size, 2 * output_size].
+        loss_score: tensorflow tensor (shape : [batch_size, 2 * output_size])
             gradient of the VAMP-1 score
-        '''
+        """
 
         # reshape data
         y_pred = self._reshape_data(y_pred)
@@ -854,8 +848,8 @@ class VampnetTools(object):
         y_der = 2/(batch_size - 1) * (tf.matmul(nabla_00, y) + tf.matmul(nabla_01, x))
 
         # Transpose back as the input y_pred was
-        x_1d = tf.transpose(x_der)
-        y_1d = tf.transpose(y_der)
+        x_1d = tf.transpose(a=x_der)
+        y_1d = tf.transpose(a=y_der)
 
         # Concatenate it again
         concat_derivatives = tf.concat([x_1d,y_1d], axis=-1)
@@ -871,7 +865,7 @@ class VampnetTools(object):
 
 
     def _metric_VAMP_sym(self, y_true, y_pred):
-        '''Metric function relative to the _loss_VAMP_sym function.
+        """Metric function relative to the _loss_VAMP_sym function.
 
         Parameters
         ----------
@@ -886,7 +880,7 @@ class VampnetTools(object):
         -------
         eig_sum: tensorflow float
             sum of the k highest eigenvalues in the vamp matrix
-        '''
+        """
 
         # reshape data
         y_pred = self._reshape_data(y_pred)
@@ -902,25 +896,25 @@ class VampnetTools(object):
         vamp_matrix = tf.matmul(cov_00_ir, tf.matmul(cov_01, cov_00_ir))
 
         # Select the K highest singular values of the VAMP matrix
-        diag = tf.convert_to_tensor(tf.linalg.svd(vamp_matrix, compute_uv=False))
+        diag = tf.convert_to_tensor(value=tf.linalg.svd(vamp_matrix, compute_uv=False))
         cond = tf.greater(self.k_eig, 0)
         top_k_val = tf.nn.top_k(diag, k=self.k_eig)[0]
 
         # Sum the singular values
-        eig_sum = tf.cond(cond, lambda: tf.reduce_sum(top_k_val), lambda: tf.reduce_sum(diag))
+        eig_sum = tf.cond(pred=cond, true_fn=lambda: tf.reduce_sum(input_tensor=top_k_val), false_fn=lambda: tf.reduce_sum(input_tensor=diag))
 
         return eig_sum
 
 
 
     def _estimate_koopman_op(self, traj, tau):
-        '''Estimates the koopman operator for a given trajectory at the lag time
+        """Estimates the koopman operator for a given trajectory at the lag time
             specified. The formula for the estimation is:
                 K = C00 ^ -1/2 @ C01 @ C11 ^ -1/2
 
         Parameters
         ----------
-        traj: numpy array with size [traj_timesteps, traj_dimensions]
+        traj: numpy array (shape : [traj_timesteps, traj_dimensions])
             Trajectory described by the returned koopman operator
 
         tau: int
@@ -928,10 +922,10 @@ class VampnetTools(object):
 
         Returns
         -------
-        koopman_op: numpy array with shape [traj_dimensions, traj_dimensions]
+        koopman_op: numpy array (shape : [traj_dimensions, traj_dimensions])
             Koopman operator estimated at timeshift tau
 
-        '''
+        """
 
         c_0 = traj[:-tau].T @ traj[:-tau]
         c_1 = traj[tau:].T @ traj[tau:]

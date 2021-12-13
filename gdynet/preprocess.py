@@ -111,6 +111,9 @@ class Preprocess(object):
                 target_index.astype('int32'))
 
     def construct_graph(self, traj_coords, lattices, atom_types, target_index):
+        """Construct graph of target atoms and neighbor connectivity using
+        chosen target indices and the input trajectory data
+        """
         if self.backend == 'kdtree':
             nbr_lists, diag_lattices = [], []
             for coord, lattice in tqdm(zip(traj_coords, lattices),

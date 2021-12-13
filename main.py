@@ -24,4 +24,8 @@ if __name__ == '__main__':
                     n_epoch=args.n_epoch,
                     shuffle=not args.no_shuffle,
                     random_seed=args.random_seed)
+    gdynet.build()
+    # use compiled model inputs to begin training
     gdynet.train_model()
+    # separate predictions from training loop
+    gdynet.test_predict(result_dir = gdynet.job_dir)

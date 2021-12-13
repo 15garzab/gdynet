@@ -14,7 +14,7 @@ _TRAJ_KEYS = ['traj_coords', 'lattices', 'nbr_lists', 'nbr_dists']
 
 
 def split_traj_files(traj_fname, split_dir, n_splits, zip=False):
-    """split the trajectories data into specified number of parts"""
+    """Split the trajectories data into specified number of parts"""
     if traj_fname[-4:] != '.npz':
         traj_fname += '.npz'
     traj_basename = os.path.basename(traj_fname).split('.')[0]
@@ -39,7 +39,7 @@ def split_traj_files(traj_fname, split_dir, n_splits, zip=False):
 
 def combine_split_files(split_dir, out_file, traj_basename, n_splits,
                         zip=False):
-    """combine the splited trajectory data into a single file"""
+    """Combine the splited trajectory data into a single file"""
     combined_dict_list = defaultdict(list)
     for i in range(n_splits):
         split_file = os.path.join(split_dir, traj_basename + str(i) + '.npz')
@@ -62,8 +62,8 @@ def combine_split_files(split_dir, out_file, traj_basename, n_splits,
 
 
 def _gen_relevant_images(x, bounds, distance_upper_bound):
-    # Map x onto the canonical unit cell, then produce the relevant
-    # mirror images
+    """Map x onto the canonical unit cell, then produce the relevant
+    mirror images"""
     real_x = x - np.where(bounds > 0.0,
                           np.floor(x / bounds) * bounds, 0.0)
     m = len(x)
@@ -96,7 +96,7 @@ def _gen_relevant_images(x, bounds, distance_upper_bound):
 
 class PeriodicKDTree(KDTree):
     """
-    kd-tree for quick nearest-neighbor lookup with periodic boundaries
+    KD-Tree for quick nearest-neighbor lookup with periodic boundaries
 
     See scipy.spatial.kdtree for details on kd-trees.
 
